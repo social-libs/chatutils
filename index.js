@@ -24,6 +24,23 @@ function createLib (execlib) {
     return ret;
   }
 
+  function edited2personal (ntfobj, userid) {
+    var myntfobj = lib.pickExcept(ntfobj, ['messageid', 'edited', 'moment', 'p2p', 'affected']);
+    myntfobj.editedmessage = {
+      id: ntfobj.messageid,
+      message: ntfobj.edited,
+      moment: ntfobj.moment
+    };
+    console.log('original', ntfobj, '=>', myntfobj);
+    return myntfobj;
+  }
+
+  function preview2personal (ntfobj, userid) {
+    var myntfobj = lib.pickExcept(ntfobj, ['messageid', 'preview', 'p2p', 'affected']);
+    myntfobj.preview = lib.extend({}, ntfobj.preview, {id: ntfobj.messageid});
+    return myntfobj;
+  }
+
   function notification2personal (ntfobj, userid) {
     var mymessage, myntfobj, mynr;
     if (!ntfobj) {
@@ -34,6 +51,12 @@ function createLib (execlib) {
     }
     if (ntfobj.seenby) {
       return rcvdseen2personal(ntfobj, userid, 'seen');
+    }
+    if (ntfobj.edited) {
+      return edited2personal(ntfobj, userid);
+    }
+    if (ntfobj.preview) {
+      return preview2personal(ntfobj, userid);
     }
     //console.log('personalize chat ntf', ntfobj, 'with', userid);
     mymessage = msguserandmidder(
@@ -70,6 +93,7 @@ function createLib (execlib) {
     nr2personal: nr2personal,
     notification2personal: notification2personal,
     msguserandmidder: msguserandmidder,
+    selfsubstituter: selfsubstituter
   };
 }
 module.exports = createLib;

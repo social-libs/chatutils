@@ -16,12 +16,51 @@ function createLib (execlib) {
     return null;
   }
 
-  function rcvdseen2personal (ntfobj, userid, rcvdorseen) {
-    //console.log('gotta handle message', rcvdorseen+'by', ntfobj);
-    var ret = lib.extend({}, ntfobj);
-    selfsubstituter(ret, rcvdorseen+'by', userid, ret.p2p);
+  function newgroup2personal (ntfobj, userid) {
+    console.log('newgroup2personal?', ntfobj);
+    return ntfobj;
+  }
+
+  function newgroupmember2personal (ntfobj, userid) {
+    console.log('newgroupmember2personal?', ntfobj);
+    return ntfobj;
+  }
+
+  function rcvdseen2personal (ntfobj, isgroup, userid, rcvdorseen, wantnewobject) {
+    var ret, propname = rcvdorseen+'by', prop;
+    if (!ntfobj) {
+      return null;
+    }
+    if (!(propname in ntfobj)) {
+      return null;
+    }
+    if (ntfobj[propname] === userid) {
+      return null;
+    }
+    ret = wantnewobject ? lib.extend({}, ntfobj) : ntfobj;
+    prop = ret[propname];
+    if (lib.isArray(prop)) {
+      if (wantnewobject) {
+        ret[propname] = prop.map(selfsubstituterformap.bind(null, userid));
+      } else {
+        prop.forEach(selfsubstituterforeach.bind(null, userid));
+      }
+    } else {
+      selfsubstituter(ret, propname, userid, isgroup);
+    }
     //console.log('=>', ntfobj);
+    userid = null;
+    wantnewobject = null;
     return ret;
+  }
+
+  function selfsubstituterforeach (userid, item) {
+    selfsubstituter(item, 'u', userid, true);
+  }
+  function selfsubstituterformap (userid, item) {
+    var myitem = lib.extend({}, item);
+    selfsubstituter(myitem, 'u', userid, true);
+    return myitem;
   }
 
   function edited2personal (ntfobj, userid) {
@@ -31,7 +70,6 @@ function createLib (execlib) {
       message: ntfobj.edited,
       moment: ntfobj.moment
     };
-    console.log('original', ntfobj, '=>', myntfobj);
     return myntfobj;
   }
 
@@ -41,22 +79,41 @@ function createLib (execlib) {
     return myntfobj;
   }
 
+  function activity2personal (ntfobj, userid) {
+    var myntfobj;
+    if (ntfobj.activity === userid) {
+      return null;
+    }
+    myntfobj = lib.pickExcept(ntfobj, ['affected']);
+    myntfobj.activity = ntfobj.activity;
+    return myntfobj;
+  }
+
   function notification2personal (ntfobj, userid) {
     var mymessage, myntfobj, mynr;
     if (!ntfobj) {
       return null;
     }
+    if (ntfobj.newgroup) {
+      return newgroup2personal(ntfobj, userid, 'rcvd');
+    }
+    if (ntfobj.newgroupmember) {
+      return newgroupmember2personal(ntfobj, userid, 'rcvd');
+    }
     if (ntfobj.rcvdby) {
-      return rcvdseen2personal(ntfobj, userid, 'rcvd');
+      return rcvdseen2personal(ntfobj, !ntfobj.p2p, userid, 'rcvd', true);
     }
     if (ntfobj.seenby) {
-      return rcvdseen2personal(ntfobj, userid, 'seen');
+      return rcvdseen2personal(ntfobj, !ntfobj.p2p, userid, 'seen', true);
     }
     if (ntfobj.edited) {
       return edited2personal(ntfobj, userid);
     }
-    if (ntfobj.preview) {
+    if ('preview' in ntfobj) {
       return preview2personal(ntfobj, userid);
+    }
+    if ('activity' in ntfobj) {
+      return activity2personal(ntfobj, userid);
     }
     //console.log('personalize chat ntf', ntfobj, 'with', userid);
     mymessage = msguserandmidder(
@@ -65,7 +122,13 @@ function createLib (execlib) {
       ntfobj.mids[1],
       lib.extend({}, ntfobj.lastmessage)
     );
-    myntfobj = lib.pickExcept(ntfobj, ['lastmessage', 'p2p', 'affected']);
+    myntfobj = lib.pickExcept(ntfobj, ['lastmessage', 'affected']);
+    //console.log('notification2personal', userid, ntfobj.lastmessage);
+    if (!ntfobj.p2p) {
+      mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'rcvd', true);
+      mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'seen', true);
+    }
+    //console.log('=>', mymessage);
     myntfobj.lastmessage = mymessage;
     mynr = nr2personal(ntfobj.nr, userid);
     //console.log('i, sta je mynr? od', ntfobj, 'za', userid, '=>', mynr);
@@ -89,11 +152,48 @@ function createLib (execlib) {
     return msg;
   }
 
+  function shouldNotificationBeMarkedAsRcvd (username, ntfobj) {
+    var ret, item;
+    if (!(ntfobj && ntfobj.lastmessage && ntfobj.mids)) {
+      return;
+    }
+    if (ntfobj.p2p) {
+      return (ntfobj.lastmessage.rcvd===null && ntfobj.lastmessage.from!==username)
+      ?
+      {
+        userid: username,
+        conversationid: ntfobj.id,
+        messageid: ntfobj.mids[ntfobj.mids.length-1]
+      }
+      :
+      null;
+    }
+    if (lib.isArray(ntfobj.lastmessage.rcvdby)) {
+      //console.log('shouldNotificationBeMarkedAsRcvd?', username, require('util').inspect(ntfobj, {depth:8}));
+      for (i=0; i<ntfobj.lastmessage.rcvdby.length; i++) {
+        item = ntfobj.lastmessage.rcvdby[i];
+        if (item.u === username) {
+          return item.rcvd ?
+            null
+            :
+            {
+              userid: username,
+              conversationid: ntfobj.id,
+              messageid: ntfobj.mids[ntfobj.mids.length-1]
+            };
+        }
+      }
+    }
+    return null;
+  }
+
   return {
+    rcvdseen2personal: rcvdseen2personal,
     nr2personal: nr2personal,
     notification2personal: notification2personal,
     msguserandmidder: msguserandmidder,
-    selfsubstituter: selfsubstituter
+    selfsubstituter: selfsubstituter,
+    shouldNotificationBeMarkedAsRcvd: shouldNotificationBeMarkedAsRcvd
   };
 }
 module.exports = createLib;

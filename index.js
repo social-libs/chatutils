@@ -1,6 +1,18 @@
 function createLib (execlib) {
 
-  var lib = execlib.lib;
+  var lib = execlib.lib,
+    zeroString = String.fromCharCode(0);
+
+  function doresolve (string, myname) {
+    var ind;
+    sp = string.split(zeroString);
+    ind = sp.length>1 ? sp.indexOf(myname) : -1;
+    if (ind>=0) {
+      sp.splice(ind,1);
+      return sp.join(zeroString);
+    }
+    return null;
+  }
 
   function nr2personal (nrs, userid) {
     var i, nr;
@@ -17,13 +29,21 @@ function createLib (execlib) {
   }
 
   function newgroup2personal (ntfobj, userid) {
-    console.log('newgroup2personal?', ntfobj);
-    return ntfobj;
+    var myntfobj = lib.extend({}, ntfobj);
+    //console.log('newgroup2personal?', ntfobj);
+    myntfobj.resolve = null; //no need to resolve, this is a group
+    return myntfobj;
   }
 
   function newgroupmember2personal (ntfobj, userid) {
-    console.log('newgroupmember2personal?', ntfobj);
-    return ntfobj;
+    //console.log('newgroupmember2personal?', ntfobj);
+    var myntfobj = lib.pickExcept(ntfobj, ['lastm', 'affected']);
+    myntfobj.resolve = null; //no need to resolve, this is a group
+    myntfobj.nr = nr2personal(myntfobj.nr, userid);
+    mymessage = rcvdseen2personal(ntfobj.lastm, true, userid, 'rcvd', true);
+    mymessage = rcvdseen2personal(mymessage, true, userid, 'seen', true);
+    myntfobj.lastm = mymessage;
+    return myntfobj;
   }
 
   function rcvdseen2personal (ntfobj, isgroup, userid, rcvdorseen, wantnewobject) {
@@ -120,16 +140,16 @@ function createLib (execlib) {
       !ntfobj.p2p,
       userid,
       ntfobj.mids[1],
-      lib.extend({}, ntfobj.lastmessage)
+      lib.extend({}, ntfobj.lastm)
     );
-    myntfobj = lib.pickExcept(ntfobj, ['lastmessage', 'affected']);
-    //console.log('notification2personal', userid, ntfobj.lastmessage);
+    myntfobj = lib.pickExcept(ntfobj, ['lastm', 'affected']);
+    //console.log('notification2personal', userid, ntfobj.lastm);
     if (!ntfobj.p2p) {
       mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'rcvd', true);
       mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'seen', true);
     }
     //console.log('=>', mymessage);
-    myntfobj.lastmessage = mymessage;
+    myntfobj.lastm = mymessage;
     mynr = nr2personal(ntfobj.nr, userid);
     //console.log('i, sta je mynr? od', ntfobj, 'za', userid, '=>', mynr);
     if (lib.isVal(mynr)) {
@@ -154,11 +174,11 @@ function createLib (execlib) {
 
   function shouldNotificationBeMarkedAsRcvd (username, ntfobj) {
     var ret, item;
-    if (!(ntfobj && ntfobj.lastmessage && ntfobj.mids)) {
+    if (!(ntfobj && ntfobj.lastm && ntfobj.mids)) {
       return;
     }
     if (ntfobj.p2p) {
-      return (ntfobj.lastmessage.rcvd===null && ntfobj.lastmessage.from!==username)
+      return (ntfobj.lastm.rcvd===null && ntfobj.lastm.from!==username)
       ?
       {
         userid: username,
@@ -168,10 +188,10 @@ function createLib (execlib) {
       :
       null;
     }
-    if (lib.isArray(ntfobj.lastmessage.rcvdby)) {
+    if (lib.isArray(ntfobj.lastm.rcvdby)) {
       //console.log('shouldNotificationBeMarkedAsRcvd?', username, require('util').inspect(ntfobj, {depth:8}));
-      for (i=0; i<ntfobj.lastmessage.rcvdby.length; i++) {
-        item = ntfobj.lastmessage.rcvdby[i];
+      for (i=0; i<ntfobj.lastm.rcvdby.length; i++) {
+        item = ntfobj.lastm.rcvdby[i];
         if (item.u === username) {
           return item.rcvd ?
             null
@@ -188,6 +208,7 @@ function createLib (execlib) {
   }
 
   return {
+    doresolve: doresolve,
     rcvdseen2personal: rcvdseen2personal,
     nr2personal: nr2personal,
     notification2personal: notification2personal,

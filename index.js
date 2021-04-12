@@ -105,7 +105,12 @@ function createLib (execlib) {
       return null;
     }
     myntfobj = lib.pickExcept(ntfobj, ['affected']);
-    myntfobj.activity = ntfobj.activity;
+    return myntfobj;
+  }
+
+  function removal2personal (ntfobj, userid) {
+    var myntfobj;
+    myntfobj = lib.pickExcept(ntfobj, ['affected']);
     return myntfobj;
   }
 
@@ -135,27 +140,36 @@ function createLib (execlib) {
     if ('activity' in ntfobj) {
       return activity2personal(ntfobj, userid);
     }
-    //console.log('personalize chat ntf', ntfobj, 'with', userid);
-    mymessage = msguserandmidder(
-      !ntfobj.p2p,
-      userid,
-      ntfobj.mids[1],
-      lib.extend({}, ntfobj.lastm)
-    );
-    myntfobj = lib.pickExcept(ntfobj, ['lastm', 'affected']);
-    //console.log('notification2personal', userid, ntfobj.lastm);
-    if (!ntfobj.p2p) {
-      mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'rcvd', true);
-      mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'seen', true);
+    if ('removedid' in ntfobj) {
+      return removal2personal(ntfobj, userid);
     }
-    //console.log('=>', mymessage);
-    myntfobj.lastm = mymessage;
-    mynr = nr2personal(ntfobj.nr, userid);
-    //console.log('i, sta je mynr? od', ntfobj, 'za', userid, '=>', mynr);
-    if (lib.isVal(mynr)) {
-      myntfobj.nr = mynr;
+    try {
+      //console.log('personalize chat ntf', ntfobj, 'with', userid);
+      mymessage = msguserandmidder(
+        !ntfobj.p2p,
+        userid,
+        ntfobj.mids[1],
+        lib.extend({}, ntfobj.lastm)
+      );
+      myntfobj = lib.pickExcept(ntfobj, ['lastm', 'affected']);
+      //console.log('notification2personal', userid, ntfobj.lastm);
+      if (!ntfobj.p2p) {
+        mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'rcvd', true);
+        mymessage = rcvdseen2personal(mymessage, !ntfobj.p2p, userid, 'seen', true);
+      }
+      //console.log('=>', mymessage);
+      myntfobj.lastm = mymessage;
+      mynr = nr2personal(ntfobj.nr, userid);
+      //console.log('i, sta je mynr? od', ntfobj, 'za', userid, '=>', mynr);
+      if (lib.isVal(mynr)) {
+        myntfobj.nr = mynr;
+      }
+      return myntfobj;
+    } catch (e) {
+      console.log('wut is dis?', ntfobj);
+      console.log('because it raised an Error', e);
+      return null;
     }
-    return myntfobj;
   }
 
   function selfsubstituter (obj, propname, myuserid, isgroup) {
